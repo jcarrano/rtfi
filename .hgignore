@@ -1,0 +1,13 @@
+syntax: glob
+*~
+*.pyc
+*.o
+*.gch
+a.out
+*.pfd
+*.elf
+*.test
+*.pdf
+
+syntax: regexp
+.*\#.*\#$
