@@ -44,7 +44,7 @@ def iso226(phon, freqs = None):
 	
 	This code is a translation of a Matlab function by Jeff Tacket.
 	Additionally, this version does a cubic spline interpolation if it is 
-	passed a vector of frequencies.
+	called with a vector of frequencies.
 	The original documentation is reproduced below:
 	
 	function [spl, freq] = iso226(phon):

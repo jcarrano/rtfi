@@ -356,4 +356,22 @@ if __name__ == '__main__':
 			plt.plot(minfs/2 * w3/np.pi, 20*np.log10(abs(H3)), color = p1.get_color())
 		
 		plt.plot(f0, normiso(f0))
+		
+		plt.figure()
+		
+		f, H = sig.freqz(h, 1, 2048, whole = 0)
+		f *= (FS[0]/2)/np.pi
+		
+		plt.subplot(3,1,1)
+		plt.plot(f, np.abs(H))
+		plt.title('magnitude')
+		
+		plt.subplot(3,1,2)
+		plt.plot(f, np.unwrap(np.angle(H)))
+		plt.title('phase')
+		
+		plt.subplot(3,1,3)
+		plt.plot(f, np.unwrap(np.angle(H))/(f*2*np.pi))
+		plt.title('delay')
+		
 		plt.show()

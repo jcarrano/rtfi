@@ -29,7 +29,7 @@
 /* Maximum lag (in blocks) between the graphical thread and the audio thread,
  * plus one,
  * Of course the minimum value is 1 + 1 = 2 */
-#define ARTFI_DELAY 4
+#define ARTFI_DELAY 6
 #define ARTFI_BSIZE N_BANDS
 
 /* Macros to advance or recede an index in a circular array. Use with caution */

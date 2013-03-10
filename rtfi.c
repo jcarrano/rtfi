@@ -47,6 +47,7 @@ static int cb_states[RTFI_STEPS];
 /* Working area */
 static sample_t *decbuf = NULL;
 static complex float yprev[RTFI_STEPS][BLOCK];
+static int block_avg_nsamples[RTFI_STEPS];
 static const struct rtfi_param *rtfi_cfg;
 
 /* we use this counter in case  we have to calculate each 2^n frames, instead
@@ -220,6 +221,11 @@ static int rtfi_process(jack_nframes_t nframes, void *arg)
 			iinit = DIVUP(processed, 2 << pstep);
 			iend = DIVUP(processed + to_process, 2 << pstep);
 			
+			if (partial_rem == block_input_len)
+				block_avg_nsamples[pstep] = (iend - iinit);
+			else
+				block_avg_nsamples[pstep] += (iend - iinit);
+			
 			for (bk = 0; bk < BLOCK; bk++) {
 				int i;
 				complex float y = yprev[pstep][bk];
@@ -232,9 +238,10 @@ static int rtfi_process(jack_nframes_t nframes, void *arg)
 				}
 				
 				yprev[pstep][bk] = y;
-				/* Could (iend - iinit) be 0? not with current
-				 * parameters so we don't care */
-				rtfi_blocks[b_write][ARTFI_LOC(pstep, bk)] = 
+				/* Could we have that for some artfi block, some
+				 * pstep produces no samples to average?
+				 * Not with current settings. We don't care */
+			/*	rtfi_blocks[b_write][ARTFI_LOC(pstep, bk)] = 
 					((iend-iinit)?
 						yacc / (iend - iinit)
 						: 0
@@ -242,7 +249,16 @@ static int rtfi_process(jack_nframes_t nframes, void *arg)
 				     +  ((partial_rem == block_input_len)?
 							0
 						:rtfi_blocks[b_write][ARTFI_LOC(pstep, bk)]
-					);
+					); */
+				rtfi_blocks[b_write][ARTFI_LOC(pstep, bk)] = 
+					(yacc + 
+					((partial_rem == block_input_len)?
+							0
+						:rtfi_blocks[b_write][ARTFI_LOC(pstep, bk)]
+					))
+					/ ((partial_rem == to_process)?
+						block_avg_nsamples[pstep]
+						:1);
 			}
 		}
 		
@@ -302,7 +318,7 @@ void *rtfi_prepare(int *ecode, sem_t *sem)
 			goto disaster;
 	}
 	
-	block_input_len = (sr * BLK_SIZE_MS) / 1000;
+	block_input_len = ceilf((sr * BLK_SIZE_MS) / 1000.0);
 	partial_rem = block_input_len;
 	
 	if (NMALLOC(decbuf, dbs) == NULL)

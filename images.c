@@ -39,7 +39,8 @@
 #define REFLEVEL_MINUS SDLK_DOWN
 #define REFLEVEL_ACCEL KMOD_SHIFT
 #define PAUSE SDLK_SPACE
-#define ACCEL_AMOUNT 10
+#define NO_ACCEL_AMOUNT 10
+#define ACCEL_AMOUNT 100
 #define MODE_PLUS SDLK_RIGHT
 #define MODE_MINUS SDLK_LEFT
 
@@ -47,6 +48,8 @@
 #define FREQ_AVG 5
 #define LOWER_THRS (90)
 #define PEAK_VALUE (-50) /* ?????????????? */
+#define MAX_FPS 60
+#define MIN_REFRESH_TIME (1000/MAX_FPS)
 
 #define ICONFILE "tficon.bmp"
 
@@ -169,7 +172,7 @@ static int image_prepare(SDL_Surface **screen, int w, int h, int fs)
 	struct view vp;
 	int r;
 	
-	vp = view_defaults(DEF_WIDTH, DEF_HEIGHT, 0);
+	vp = view_defaults(w, h, 0);
 	vp.fullscreen = fs;
 	r = mkview(&vp);
 	if (r < 0)
@@ -198,15 +201,25 @@ static inline float denorm0(float v,  float peak, float ths)
 	return (value < ths)? ((value < 0) ? 0 : value) : ths;
 }
 
-static inline struct RGB tf_graph(float v, float peak , float ths)
+static inline float denorm1(float v, float peak , float ths)
 {
-	float value = denorm0(v, peak, ths)/ths * 255;
-	return rgb(value, value, value);
+	return denorm0(v, peak, ths)/ths;
 }
 
 static inline struct RGB gray(float v)
 {
 	return rgb(v, v, v);
+}
+
+static inline struct RGB iris(float v)
+{
+	/* v between 0 and 1 */
+	/* float v = v; (pasthrough) */
+	/*float c = v * (1 - v) * (0.5 - v) * (0.5 - v) * 64;*/
+	/*float c = 4*v*(1-v)*((0.5 - v)*(0.5 - v) *11.6569 + 0.5);*/
+	float c = 6.75*v*v*v - 13.5 * v*v + 6.75 * v;
+	float h = ((v > 0.5)? (v - 1) : v) * 2 * M_PI;
+	return hcv2rgb(hcv(h, c, v*v));
 }
 
 static inline void pes(float *dst, float *src, int n)
@@ -224,12 +237,13 @@ static inline void pes(float *dst, float *src, int n)
 }
 
 
-static inline void spes(float *dst, float src[][REAL_N_BANDS], int n)
+static inline void spes(float *dst, float src[][REAL_N_BANDS], float *max, int n)
 {
 	int i, t, f;
+	float m = -INFINITY;
 	
 	for (f = 0; f < n; f++) {
-		float acc = 0;
+		float acc = 0, tmp;
 		for (t = 0; t < TIME_AVG; t++) {
 			for (i = (-FREQ_AVG)/2 + 1; i <= FREQ_AVG/2; i++) {
 				int fk = f + i;
@@ -237,8 +251,11 @@ static inline void spes(float *dst, float src[][REAL_N_BANDS], int n)
 					acc += src[t][fk];
 			}
 		}
-		dst[f] = acc / (TIME_AVG * FREQ_AVG);
+		tmp = acc / (TIME_AVG * FREQ_AVG);
+		m = fmaxf(m, tmp);
+		dst[f] = tmp;
 	}
+	*max = m;
 }
 
 static inline void npes(float *dst, float *src, int n)
@@ -261,6 +278,7 @@ static int image_run(SDL_Surface *screen)
 	unsigned int bufindex = 0, read_p = 0;
 	SDL_Surface *circ_buf;
 	int k = 0, aa = 0, i;
+	Uint32 last_time;
 	float dbmin = INFINITY, dbmax = -INFINITY;
 	
 	uicontrol.base_band = REAL_N_BANDS - H;
@@ -279,13 +297,16 @@ static int image_run(SDL_Surface *screen)
 	for (i = 0; i < TIME_AVG*REAL_N_BANDS; i++)
 		pesbuffer[0][i] = 0.0;
 	
+	last_time = SDL_GetTicks();
 	uicontrol.running = 1;
 	while (!uicontrol.quit_requested) {
 		int read_valid = 0, y, f, retries = 0, dmode = uicontrol.mode;
-		float current[REAL_N_BANDS], spesbuf[REAL_N_BANDS];
+		int baseb = uicontrol.base_band, paused = uicontrol.paused;
+		float current[REAL_N_BANDS], spesbuf[REAL_N_BANDS], spesmax;
 		SDL_Rect marker_present;
 		SDL_Rect marker_present_ins = {0};
 		SDL_Rect marker_past;
+		Uint32 tmp_time;
 		
 		marker_present.h = marker_past.h = H;
 		marker_present_ins.y = marker_present.y = marker_past.y = 0;
@@ -329,61 +350,69 @@ static int image_run(SDL_Surface *screen)
 			dbmax = -INFINITY;
 		}
 		
-		if (!uicontrol.paused) 
-		{
-		
 		marker_present.w = k + 1;
 		marker_past.x = k + 1;
 		marker_present_ins.x = marker_past.w = W - k - 1;
 		
+		if (!paused) 
+		{
 		pes(pesbuffer[bufindex], current, REAL_N_BANDS);
-		spes(spesbuf, pesbuffer, REAL_N_BANDS);
-		if (dmode == NPES)
+		spes(spesbuf, pesbuffer, &spesmax, REAL_N_BANDS);
+	/*	if (dmode == NPES)
 			npes(spesbuf, spesbuf, REAL_N_BANDS);
-		
+	*/	
 		for (y = 0; y < H ; y++)
 		{
 			float tmp;
-			struct RGB c;
-			if ((f = y + uicontrol.base_band)< REAL_N_BANDS) {
+			float c;
+			if ((f = y + baseb)< REAL_N_BANDS) {
 				switch (dmode) {
 				default:
 				case NPES:
-					c = tf_graph(spesbuf[f], 0, 8);
+					c = denorm1(spesbuf[f], spesmax, 8);
 					break;
 				case SPES:
-					c = tf_graph(spesbuf[f], 35, 30);
+					c = denorm1(spesbuf[f], 40, 40);
 					break;
 				case PES:
-					c = tf_graph(pesbuffer[bufindex][f], 50, 30);
+					c = denorm1(pesbuffer[bufindex][f], 55, 50);
 					break;
 				case AES:
 				case ARTFI:
-					c = gray(current[f]/LOWER_THRS * 255);
+					c = current[f]/LOWER_THRS;
 					break;
 				}
 			} else {
-				c = gray(0);
+				c = 0;
 			}
 			
-			/*tmp = spesbuf[f]; */
-			tmp = pesbuffer[bufindex][f];
+			tmp = spesbuf[f];
+			/*tmp = pesbuffer[bufindex][f];*/
+			/* */
 			dbmax = fmaxf(tmp, dbmax);
 			dbmin = fminf(tmp, dbmin);
-			putpixel(circ_buf, k, y, c);
+			putpixel(circ_buf, k, y, iris(c));
 		}
 		
 		INCMOD(bufindex, TIME_AVG);
-		
-		SDL_BlitSurface(circ_buf, &marker_present, screen, &marker_present_ins);
-		SDL_BlitSurface(circ_buf, &marker_past, screen, &marker_present);
 		
 		k++;
 		if (k >= W) {
 			k = 0;
 		}
 		}
-		SDL_Flip(screen); 
+		tmp_time = SDL_GetTicks();
+		if (tmp_time - last_time >= MIN_REFRESH_TIME) {
+			if (!paused) {
+			SDL_BlitSurface(circ_buf, &marker_present, screen, 
+							&marker_present_ins);
+			SDL_BlitSurface(circ_buf, &marker_past, screen, 
+							&marker_present);
+			}
+			last_time = tmp_time;
+			SDL_Flip(screen);
+		}
+		
 		
 	}
 	uicontrol.running = 0;
@@ -432,6 +461,8 @@ static int event_parser(void *data)
 			
 			if (ev.key.keysym.mod & REFLEVEL_ACCEL)
 				ref_delta = ref_delta * ACCEL_AMOUNT;
+			else
+				ref_delta = ref_delta * NO_ACCEL_AMOUNT;
 			
 			new_ref = uicontrol.base_band + ref_delta;
 			uicontrol.base_band = (new_ref > 0)? 
