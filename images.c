@@ -29,8 +29,15 @@
 #include <jgl/view.h>
 #include <jgl/color.h>
 #include <jgl/input.h>
+#include <libjc/common.h>
 #include "rtfi.h"
 #include "spectral_tables.c"
+
+#ifdef DEBUG
+#define PDEBUG PERROR
+#else
+#define PDEBUG PDUMMY
+#endif /*DEBUG*/
 
 #define DEF_WIDTH 800
 #define DEF_HEIGHT 600
@@ -154,8 +161,6 @@ sem_disaster:
 static Uint32 start_rtfi(Uint32 interval, void *param_)
 {
 	struct start_param *param = param_;
-	
-	printf("ddddd\n");
 	
 	*param->r = rtfi_launch(param->client);
 	if (*param->r != 0) {
@@ -318,7 +323,8 @@ static int image_run(SDL_Surface *screen)
 			
 			retries++;
 			if (retries > 1)
-				printf("retries: %d\n", retries);
+				PDEBUG("retries: %d\n", retries);
+			
 			sem_wait(block_lock);
 			INCMOD(read_p, ARTFI_DELAY);
 			
@@ -345,7 +351,7 @@ static int image_run(SDL_Surface *screen)
 		}
 		aa++;
 		if (!(aa%64)) {
-			printf("min: %f, max: %f\n", dbmin, dbmax);
+			PDEBUG("min: %f, max: %f\n", dbmin, dbmax);
 			dbmin = INFINITY;
 			dbmax = -INFINITY;
 		}
@@ -424,7 +430,7 @@ static int event_parser(void *data)
 {
 	while (!uicontrol.quit_requested) {
 		SDL_Event ev;
-	/*	printf("aaa\n"); */
+	/*	PDEBUG("aaa\n"); */
 		SDL_WaitEvent(&ev);
 		if (QuitFilter(&ev)) {
 			uicontrol.quit_requested = 1;
@@ -454,7 +460,7 @@ static int event_parser(void *data)
 			}
 			
 			if (mode_changed) {
-				printf("Mode: %d\n" , uicontrol.mode);
+				PDEBUG("Mode: %d\n" , uicontrol.mode);
 				SDL_WM_SetCaption(modenames[uicontrol.mode],
 						modenames[uicontrol.mode]);
 			}

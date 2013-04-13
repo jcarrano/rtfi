@@ -1,0 +1,53 @@
+== Resonator Time-Frequency Image ==
+ by Juan I Carrano
+
+This is an implementation of the RTFI, as described in [1]. It consists of a bank of band-pass filters, whith the same Q-factors and exponentially spaced center frequencies.
+The filter are single complex pole resonators, that is they are not symmetric in the Z-plane. They take a real input, but have a complex state and a complex output. The advantage of this is that the envelope of the filtered signal can be obtained by calculating the norm of the output samples.
+In order to make the calculation of 900 filters feasible in real time, the multirate approach suggested by Zhou is employed.
+
+== Usage ==
+
+Launch the jack daemon
+(Optionally) launch mkmono
+Launch rtfi:
+	# ./rtfi [width] [height]
+or go fullscrenn with
+	# ./rtfi f
+
+Within the program:
+ESC, q: exit
+UP, DOWN: move y axes. Holding SHIFT moves by a greater amount
+LEFT, RIGHT: change between ARTFI, AES, PES; SPES and NPES
+
+=== Compile ===
+
+type
+$ ./build.sh
+
+Maybe sometime I will make a makefile.
+
+=== Launch ===
+
+Launch the jack daemon. Supported sample frequencies are 44100Hz, 48000Hz and 96000Hz.
+Launch the rtfi program:
+$ ./rtfi
+
+You can use the included helper program, `mkmono`, to downmix a stereo signal.
+
+== Implementation details ==
+
+This code uses the jack-audio-connection-kit and SDL.
+The filter bank runs as a JACK callback, and outputs a ARTFI frame (consisting of 900 bins) every 10ms to a circular buffer capable of holding 6 frames.
+The drawing thread reads from this buffer. Synchronization is done by semaphores, where the value of the semaphore represents the amount of frames waiting to be read.
+The drawing thread processes the ARTFI data to obtain AES, PES, SPES and NPES.
+Finally, there is a UI thread processes keyboard events.
+
+The script `rtfi.py` calculates the coefficients and generates the C-files containing the tables.
+
+== Current limitations & issues ==
+
+The multirate processing does not take into account the delays introduced by decimating filters. Because of this, the lower-frequency bins of the ARTFI are delayed with respect to the higher frequency ones. This degrades the note detection capabilities for fast and short notes.
+Low frequency content and percussion also affects the note detection ability. Equalizing the signal before feeding it to the RTFI can alleviate the problem. This can be done easily with jack-rack or similar software.
+
+[1] R. Zhou and M. Mattavelli, "A new time-frequency representation for music signal analysis: resonator time-frequency image," in Proceedings of the 9th International Symposium on Signal Processing and Its Applications (ISSPA '07), Sharijah, UAE, February 2007.
+
