@@ -47,6 +47,7 @@ static int cb_states[RTFI_STEPS];
 /* Working area */
 static sample_t *decbuf = NULL;
 static complex float yprev[RTFI_STEPS][BLOCK];
+static complex float partial_power[RTFI_STEPS][BLOCK];
 static int block_avg_nsamples[RTFI_STEPS];
 static const struct rtfi_param *rtfi_cfg;
 
@@ -282,8 +283,7 @@ static inline int decbuf_minsize(int jack_bufsize) {
 void *rtfi_prepare(int *ecode, sem_t *sem)
 { /* Returns a jack client on success, NULL on failure, error code in *ecode */
 	jack_client_t* client;
-	int bs;
-	int dbs;
+	int bs, dbs, i;
 	int r = 0;
 	
 	/* Jack initialization */
@@ -325,7 +325,13 @@ void *rtfi_prepare(int *ecode, sem_t *sem)
 		r = -E_NOMEM;
 		
 	block_lock = sem;
-
+	
+	for (i = 0; i < ARSIZE(yprev); i++)
+		yprev[0][i] = 0;
+	
+	for (i = 0; i < ARSIZE(partial_power); i++)
+		partial_power[0][i] = 0;
+	
 /* Leave activation to the caller */	
 /*	if (jack_activate(client)) {
 		printf("Could not activate client\n");
