@@ -1,7 +1,7 @@
 /*
  * rtfi.c
  *
- * Copyright 2012 Juan I Carrano <juan@superfreak.com.ar>
+ * Copyright 2012 Juan I Carrano <juan@carrano.com.ar>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
