@@ -8,6 +8,7 @@ a.out
 *.elf
 *.test
 *.pdf
+cmap.xcf
 
 syntax: regexp
 .*\#.*\#$

@@ -1,18 +1,18 @@
 /*
  * images.c
- * 
+ *
  * Copyright 2012 Juan I Carrano <juan@superfreak.com.ar>
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
@@ -31,7 +31,7 @@
 #include <jgl/input.h>
 #include <libjc/common.h>
 #include "rtfi.h"
-#include "spectral_tables.c"
+#include "../src_generated/spectral_tables.c"
 
 #ifdef DEBUG
 #define PDEBUG PERROR
@@ -57,6 +57,10 @@
 #define PEAK_VALUE (-50) /* ?????????????? */
 #define MAX_FPS 60
 #define MIN_REFRESH_TIME (1000/MAX_FPS)
+
+#ifndef M_PI
+#define M_PI (3.14159265358979323846)
+#endif /* M_PI */
 
 #define ICONFILE "tficon.bmp"
 
@@ -95,20 +99,20 @@ int main(int argc, char *argv[])
 	SDL_Thread *img_th;
 	sem_t sem;
 	struct start_param stp;
-	
+
 	/* Semaphore init */
 	if (sem_init(&sem, 0, 0) != 0) {
 		r = errno;
 		goto sem_disaster;
 	}
-	
+
 	/* RTFI initialization */
 	client = rtfi_prepare(&r, &sem);
 	if (client == NULL) {
 		r = -E_OTHER;
 		goto rtfi_disaster;
 	}
-	
+
 	if (argc == 3) {
 		w = strtol(argv[1], NULL, 0);
 		h = strtol(argv[2], NULL, 0);
@@ -124,24 +128,24 @@ int main(int argc, char *argv[])
 			goto not_configured;
 		}
 	}
-	
+
 	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER);
 	SDL_WM_SetCaption("RTFI","RTFI");
-	
+
 	if ((icon = SDL_LoadBMP(ICONFILE)) != NULL) {
 		SDL_WM_SetIcon(icon, NULL);
 		SDL_FreeSurface(icon);
 	}
-	
+
 	if ((r = image_prepare(&screen, w, h, fs)) < 0)
 		goto image_disaster;
-	
+
 	stp.r = &r;
 	stp.client = client;
 	stp.sem = &sem;
-	
+
 	img_th = SDL_CreateThread(image_run, screen);
-	
+
 	SDL_Delay(1000);
 	start_rtfi(0, &stp);
 	event_parser(NULL);
@@ -161,14 +165,14 @@ sem_disaster:
 static Uint32 start_rtfi(Uint32 interval, void *param_)
 {
 	struct start_param *param = param_;
-	
+
 	*param->r = rtfi_launch(param->client);
 	if (*param->r != 0) {
 		uicontrol.quit_requested = 1;
 		while (uicontrol.running)
 			sem_post(param->sem);
 	}
-	
+
 	return 0;
 }
 
@@ -176,7 +180,7 @@ static int image_prepare(SDL_Surface **screen, int w, int h, int fs)
 {
 	struct view vp;
 	int r;
-	
+
 	vp = view_defaults(w, h, 0);
 	vp.fullscreen = fs;
 	r = mkview(&vp);
@@ -184,14 +188,14 @@ static int image_prepare(SDL_Surface **screen, int w, int h, int fs)
 		*screen = NULL;
 	else
 		*screen = view_screen(&vp);
-	
+
 	return r;
 }
 
 static inline void putpixel(SDL_Surface *scr, int i, int j, struct RGB col)
 {
 	Uint32 Ucol = SDL_MapRGB(scr->format, col.r, col.g, col.b);
-	
+
 	((Uint32 *)scr->pixels)[j*scr->pitch/4 + i] = Ucol;
 }
 
@@ -230,11 +234,11 @@ static inline struct RGB iris(float v)
 static inline void pes(float *dst, float *src, int n)
 {
 	int i;
-	
+
 	for (i = n - 1; i >= 0; i--) {
 		float acc = src[i];
 		int k;
-		for (k = 0; k < sizeof(hindex)/sizeof(*hindex) 
+		for (k = 0; k < sizeof(hindex)/sizeof(*hindex)
 				&& i - hindex[k] >= 0; 	k++)
 			acc += src[i - hindex[k]];
 		dst[i] = acc / N_HARM;
@@ -246,7 +250,7 @@ static inline void spes(float *dst, float src[][REAL_N_BANDS], float *max, int n
 {
 	int i, t, f;
 	float m = -INFINITY;
-	
+
 	for (f = 0; f < n; f++) {
 		float acc = 0, tmp;
 		for (t = 0; t < TIME_AVG; t++) {
@@ -267,7 +271,7 @@ static inline void npes(float *dst, float *src, int n)
 {
 	int f;
 	float max = 0;
-	
+
 	for (f = 0; f < n; f++) {
 		max = fmaxf(max, src[f]);
 	}
@@ -285,23 +289,23 @@ static int image_run(SDL_Surface *screen)
 	int k = 0, aa = 0, i;
 	Uint32 last_time;
 	float dbmin = INFINITY, dbmax = -INFINITY;
-	
+
 	uicontrol.base_band = REAL_N_BANDS - H;
-	
-	circ_buf = SDL_CreateRGBSurface(screen->flags, W, H, 
-			screen->format->BitsPerPixel, 
+
+	circ_buf = SDL_CreateRGBSurface(screen->flags, W, H,
+			screen->format->BitsPerPixel,
 			screen->format->Rmask,
 			screen->format->Gmask,
 			screen->format->Bmask,
 			screen->format->Amask);
-	
+
 	SDL_FillRect(circ_buf, NULL, 0);
-	
+
 	read_p = ARTFI_DELAY - 1;
-	
+
 	for (i = 0; i < TIME_AVG*REAL_N_BANDS; i++)
 		pesbuffer[0][i] = 0.0;
-	
+
 	last_time = SDL_GetTicks();
 	uicontrol.running = 1;
 	while (!uicontrol.quit_requested) {
@@ -312,28 +316,28 @@ static int image_run(SDL_Surface *screen)
 		SDL_Rect marker_present_ins = {0};
 		SDL_Rect marker_past;
 		Uint32 tmp_time;
-		
+
 		marker_present.h = marker_past.h = H;
 		marker_present_ins.y = marker_present.y = marker_past.y = 0;
 		marker_present.x = 0;
-		
-		
+
+
 		while (!read_valid){
 			int sv, i;
-			
+
 			retries++;
 			if (retries > 1)
 				PDEBUG("retries: %d\n", retries);
-			
+
 			sem_wait(block_lock);
 			INCMOD(read_p, ARTFI_DELAY);
-			
+
 			sem_getvalue(block_lock, &sv);
 			if (retries > 1)
 				printf("sem: %d\n", sv);
 			if (sv >= (ARTFI_DELAY - 1))
 				continue;
-			
+
 			for (i = 0; i < REAL_N_BANDS; i++) {
 				float tmp;
 				tmp = dba(rtfi_blocks[read_p][i]);
@@ -342,11 +346,11 @@ static int image_run(SDL_Surface *screen)
 					PEAK_VALUE,
 					LOWER_THRS);
 			}
-			
+
 			sem_getvalue(block_lock, &sv);
 			if (sv >= (ARTFI_DELAY - 1))
 				continue;
-			
+
 			read_valid = 1;
 		}
 		aa++;
@@ -355,18 +359,18 @@ static int image_run(SDL_Surface *screen)
 			dbmin = INFINITY;
 			dbmax = -INFINITY;
 		}
-		
+
 		marker_present.w = k + 1;
 		marker_past.x = k + 1;
 		marker_present_ins.x = marker_past.w = W - k - 1;
-		
-		if (!paused) 
+
+		if (!paused)
 		{
 		pes(pesbuffer[bufindex], current, REAL_N_BANDS);
 		spes(spesbuf, pesbuffer, &spesmax, REAL_N_BANDS);
 	/*	if (dmode == NPES)
 			npes(spesbuf, spesbuf, REAL_N_BANDS);
-	*/	
+	*/
 		for (y = 0; y < H ; y++)
 		{
 			float tmp;
@@ -391,7 +395,7 @@ static int image_run(SDL_Surface *screen)
 			} else {
 				c = 0;
 			}
-			
+
 			tmp = spesbuf[f];
 			/*tmp = pesbuffer[bufindex][f];*/
 			/* */
@@ -399,9 +403,9 @@ static int image_run(SDL_Surface *screen)
 			dbmin = fminf(tmp, dbmin);
 			putpixel(circ_buf, k, y, iris(c));
 		}
-		
+
 		INCMOD(bufindex, TIME_AVG);
-		
+
 		k++;
 		if (k >= W) {
 			k = 0;
@@ -410,19 +414,19 @@ static int image_run(SDL_Surface *screen)
 		tmp_time = SDL_GetTicks();
 		if (tmp_time - last_time >= MIN_REFRESH_TIME) {
 			if (!paused) {
-			SDL_BlitSurface(circ_buf, &marker_present, screen, 
+			SDL_BlitSurface(circ_buf, &marker_present, screen,
 							&marker_present_ins);
-			SDL_BlitSurface(circ_buf, &marker_past, screen, 
+			SDL_BlitSurface(circ_buf, &marker_past, screen,
 							&marker_present);
 			}
 			last_time = tmp_time;
 			SDL_Flip(screen);
 		}
-		
-		
+
+
 	}
 	uicontrol.running = 0;
-	
+
 	return 0;
 }
 
@@ -436,7 +440,7 @@ static int event_parser(void *data)
 			uicontrol.quit_requested = 1;
 		} else if (ev.type == SDL_KEYDOWN) {
 			int ref_delta = 0, new_ref, mode_changed = 0;
-			
+
 			switch (ev.key.keysym.sym) {
 			case REFLEVEL_PLUS:
 				ref_delta = 1;
@@ -455,30 +459,30 @@ static int event_parser(void *data)
 				DECMOD(uicontrol.mode, N_MODES);
 				mode_changed = 1;
 				break;
-			default: 
+			default:
 				continue;
 			}
-			
+
 			if (mode_changed) {
 				PDEBUG("Mode: %d\n" , uicontrol.mode);
 				SDL_WM_SetCaption(modenames[uicontrol.mode],
 						modenames[uicontrol.mode]);
 			}
-			
+
 			if (ev.key.keysym.mod & REFLEVEL_ACCEL)
 				ref_delta = ref_delta * ACCEL_AMOUNT;
 			else
 				ref_delta = ref_delta * NO_ACCEL_AMOUNT;
-			
+
 			new_ref = uicontrol.base_band + ref_delta;
-			uicontrol.base_band = (new_ref > 0)? 
-						((new_ref < REAL_N_BANDS)? 
-							new_ref 
+			uicontrol.base_band = (new_ref > 0)?
+						((new_ref < REAL_N_BANDS)?
+							new_ref
 							: N_BANDS - 1)
 						: 0;
 		}
 	}
-	
+
 	return 0;
 }
 

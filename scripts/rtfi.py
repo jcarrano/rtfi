@@ -20,6 +20,8 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 
+import argparse
+import os.path
 import numpy as np
 import scipy.signal as sig
 from textwrap import wrap
@@ -183,7 +185,6 @@ OCTAVE = 12
 BLOCK = FXST*OCTAVE
 FILENAME = "rtfi_params.c"
 AUXFILENAME = "rtfi_defines.h"
-AUXFILENAME_CLEAN = AUXFILENAME.replace('.', '_')
 SPECFILE = "spectral_tables.c"
 ISOPHON = 70.0
 N_HARM = 10
@@ -271,7 +272,7 @@ static const int hindex[N_HARM - 1] = {{
 def list2carray(l):
 	"""Convert a numpy array into a C array for inclusion in a source file."""
 	return "\n\t".join(wrap(", ".join("%.16g"%x if not x.imag else
-			"%.16g + %.16g*I"%(x.real, x.imag) for x in l)))
+			"%.16gf + %.16gf*I"%(x.real, x.imag) for x in l)))
 
 def create_params(f0, frw, fs, att, n):
 	upper_f0 = f0[-BLOCK:]
@@ -322,21 +323,42 @@ def define(f, k, v):
 	"""Write a preprocessor #define macro to the file object f."""
 	f.write("#define {0} {1}\n".format(k, v))
 
-if __name__ == '__main__':
-	import sys
+def parse_args():
+	parser = argparse.ArgumentParser(description="Generate (or plot) RTFI "
+									 "filter parameters.")
+	parser.add_argument("-p", "--plot", help="Plot frequency response",
+						action="store_true")
+	parser.add_argument("-w", "--write", help="Write output to file",
+						action="store_true")
 
-	if 'write' in sys.argv:
-		fo = open(FILENAME, 'w+')
-		fd = open(AUXFILENAME, 'w+')
-		specf = open(SPECFILE, 'w+')
+	parser.add_argument("-m", "--mainfile", help="Override filename for filter "
+						"coefficient table.", default=FILENAME)
+	parser.add_argument("-a", "--auxfile", help="Override filename for the header "
+						"of coefficient table.", default=AUXFILENAME)
+	parser.add_argument("-s", "--specfile", help="Override filename for the equal "
+						"loudness contour table.", default=SPECFILE)
+
+
+	return parser.parse_args()
+
+if __name__ == '__main__':
+	ns = parse_args()
+
+	if ns.write:
+		fo = open(ns.mainfile, 'w+')
+		fd = open(ns.auxfile, 'w+')
+		specf = open(ns.specfile, 'w+')
 	else:
+		import sys
 		fo = fd = specf = sys.stdout
 
-	fo.write(file_header % (FILENAME, len(FS), list2carray(FS)))
+	auxfile_clean = ns.auxfile.replace('.', '_')
+	fo.write(file_header % (ns.mainfile, len(FS), list2carray(FS)))
 
-	if 'write' in sys.argv:
-		fo.write('#include "%s"\n' % AUXFILENAME)
-		fd.write(defines_header.format(AUXFILENAME_CLEAN))
+	if ns.write:
+		fo.write('#include "%s"\n' % os.path.relpath(
+			ns.auxfile, os.path.dirname(ns.mainfile)))
+		fd.write(defines_header.format(auxfile_clean))
 
 	define(fd, 'FXST', FXST)
 	define(fd, 'OCTAVE', OCTAVE)
@@ -364,8 +386,8 @@ if __name__ == '__main__':
 
 	define(fd, 'DFILTER_N', maxn)
 
-	if 'write' in sys.argv:
-		fd.write(defines_footer % AUXFILENAME_CLEAN)
+	if ns.write:
+		fd.write(defines_footer % auxfile_clean)
 
 	fo.write(struct_def)
 
@@ -375,15 +397,16 @@ if __name__ == '__main__':
 	fo.write("/* Automatically generated file ends here */\n")
 
 	specf.write(spec_header % ISOPHON)
-	if 'write' in sys.argv:
-		specf.write('#include "%s"\n' % AUXFILENAME)
+	if ns.write:
+		specf.write('#include "%s"\n' % os.path.relpath(
+			ns.auxfile, os.path.dirname(ns.specfile)))
 
 	define(specf, 'N_HARM', N_HARM);
 	specf.write(create_hindexes(f0, N_HARM))
 	specf.write(create_isocurve(f0))
 	specf.write(spec_footer)
 
-	if 'plot' in  sys.argv:
+	if ns.plot:
 		import matplotlib.pyplot as plt
 
 		plt.figure()

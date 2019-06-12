@@ -1,6 +1,6 @@
 /* Automatically generated definitions. DO NOT edit */
-#ifndef __rtfi_defines_h__
-#define __rtfi_defines_h__
+#ifndef __src_generated/rtfi_defines_h__
+#define __src_generated/rtfi_defines_h__
 #define FXST 10
 #define OCTAVE 12
 #define BLOCK (FXST*OCTAVE)
@@ -11,4 +11,4 @@
 #define BOTTOM_MINIDEX 60
 #define DFILTER_N 32
 
-#endif /* __rtfi_defines_h__ */ /* End of automatically generated definitions */
+#endif /* __src_generated/rtfi_defines_h__ */ /* End of automatically generated definitions */
