@@ -1,4 +1,3 @@
-syntax: glob
 *~
 *.pyc
 *.o
@@ -10,6 +9,3 @@ a.out
 *.pdf
 cmap.xcf
 build/
-
-syntax: regexp
-.*\#.*\#$
