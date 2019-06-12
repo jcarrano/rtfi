@@ -44,7 +44,6 @@ To start the program::
 
   # (if necessary) Launch the jack daemon
   $ jackd -r -d alsa
-  # (Optionally) launch mkmono
   # Launch rtfi:
   $ ./rtfi [width] [height]
   # or go fullscrenn with
