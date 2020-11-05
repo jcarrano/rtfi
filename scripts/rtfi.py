@@ -269,10 +269,18 @@ static const int hindex[N_HARM - 1] = {{
 }};
 """
 
+def number2str(x):
+	if not x.imag:
+		if isinstance(x, np.integer):
+			return str(x)
+		else:
+			return "%.16ff"%x
+	else:
+		return "%.16ff + %.16ff*I"%(x.real, x.imag)
+
 def list2carray(l):
 	"""Convert a numpy array into a C array for inclusion in a source file."""
-	return "\n\t".join(wrap(", ".join("%.16g"%x if not x.imag else
-			"%.16gf + %.16gf*I"%(x.real, x.imag) for x in l)))
+	return "\n\t".join(wrap(", ".join(number2str(x) for x in l)))
 
 def create_params(f0, frw, fs, att, n):
 	upper_f0 = f0[-BLOCK:]
@@ -352,7 +360,7 @@ if __name__ == '__main__':
 		import sys
 		fo = fd = specf = sys.stdout
 
-	auxfile_clean = ns.auxfile.replace('.', '_')
+	auxfile_clean = ns.auxfile.replace('.', '_').replace('/', '_')
 	fo.write(file_header % (ns.mainfile, len(FS), list2carray(FS)))
 
 	if ns.write:
