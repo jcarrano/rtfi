@@ -14,7 +14,7 @@ PYTHON ?= python3
 
 # preprocessor
 IPATH += $(addprefix -I,$(LOCAL_LIBS))
-CPPFLAGS += $(IPATH)
+CPPFLAGS += $(IPATH) -D_DEFAULT_SOURCE
 
 # compiler
 WFLAGS ?= -pedantic -Wall -Wextra -Wconversion
@@ -180,4 +180,3 @@ $(OUT_FILE): $(NEEDED_OBJECTS) | directories
 
 $(OUT_DIR)/%.o: | directories
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-
