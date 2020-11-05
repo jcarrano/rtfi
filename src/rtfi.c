@@ -227,7 +227,7 @@ static int rtfi_process(jack_nframes_t nframes, void *arg)
 			else
 				block_avg_nsamples[pstep] += (iend - iinit);
 
-			for (bk = 0; bk < BLOCK; bk++) {
+			for (bk = 0; bk < BLOCK && ARTFI_LOC(pstep, bk) < N_BANDS; bk++) {
 				int i;
 				complex float y = yprev[pstep][bk];
 				float yacc = 0;
